@@ -343,7 +343,7 @@ int bmi_port_destroy_mgr(bmi_port_mgr_t *port_mgr) {
   pthread_rwlock_wrlock(&port_mgr->lock);
   bmi_port_t *port;
   int i;
-  for (i = 0; i < port_mgr->port_count; i++) {
+  for (i = port_mgr->port_count - 1; i >= 0; i--) {
     port = &port_mgr->ports[i];
     _bmi_port_interface_remove(port_mgr, port->port_num);
   }
