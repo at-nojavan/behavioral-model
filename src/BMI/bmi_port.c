@@ -319,7 +319,9 @@ static int _bmi_port_interface_remove(bmi_port_mgr_t *port_mgr, int port_num) {
 
   char buf[1] = {'\x00'};
   write(port_mgr->socketpairfd[0], buf, sizeof(buf));
+  pthread_rwlock_unlock(&port_mgr->lock);
   read(port_mgr->socketpairfd[0], buf, sizeof(buf));
+  pthread_rwlock_wrlock(&port_mgr->lock);
 
   if (bmi_interface_destroy(port->bmi) != 0) return -1;
 
