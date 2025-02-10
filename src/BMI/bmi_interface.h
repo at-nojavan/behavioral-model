@@ -21,6 +21,9 @@
 #ifndef _BMI_INTERFACE_
 #define _BMI_INTERFACE_
 
+// Converted this code from C to C++ so we have to use extern C to ensures a C++ function adheres to the C calling convention.
+extern "C" {
+
 typedef struct bmi_interface_s bmi_interface_t;
 
 typedef enum
@@ -44,3 +47,5 @@ int bmi_interface_recv_with_copy(bmi_interface_t *bmi, char *data, int max_len);
 int bmi_interface_get_fd(bmi_interface_t *bmi);
 
 #endif
+
+} //extern c

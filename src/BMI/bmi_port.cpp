@@ -190,12 +190,13 @@ int bmi_port_create_mgr(bmi_port_mgr_t **port_mgr, int max_port_count) {
 
   if (!port_mgr) return -1;
 
-  bmi_port_mgr_t *port_mgr_ = malloc(sizeof(bmi_port_mgr_t));
+  void *raw_mem = malloc(sizeof(bmi_port_mgr_t));
+  bmi_port_mgr_t *port_mgr_ = (bmi_port_mgr_t*)raw_mem;
 
   memset(port_mgr_, 0, sizeof(bmi_port_mgr_t));
 
   port_mgr_->max_port_count = max_port_count;
-  port_mgr_->ports = calloc(max_port_count, sizeof(*port_mgr_->ports));
+  port_mgr_->ports = static_cast<decltype(port_mgr_->ports)>(calloc(max_port_count, sizeof(*port_mgr_->ports)));
 
   if (socketpair(PF_LOCAL, SOCK_STREAM, 0, port_mgr_->socketpairfd)) {
     perror("socketpair");

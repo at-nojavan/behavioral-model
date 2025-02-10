@@ -38,8 +38,9 @@ typedef struct bmi_interface_s {
 /* } */
 
 int bmi_interface_create(bmi_interface_t **bmi, const char *device) {
-  bmi_interface_t *bmi_ = malloc(sizeof(bmi_interface_t));
-
+  void *raw_mem = malloc(sizeof(bmi_interface_t));
+  bmi_interface_t *bmi_ = (bmi_interface_t*)raw_mem;
+  
   if(!bmi_) return -1;
 
   bmi_->pcap_input_dumper = NULL;

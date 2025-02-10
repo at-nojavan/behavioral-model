@@ -33,7 +33,7 @@ $(builddir)/libtestutils.la \
 -lboost_system -lboost_filesystem -lboost_program_options
 
 # Define unit tests
-common_source = main.cpp bmi_stubs.c primitives.cpp
+common_source = main.cpp bmi_stubs.cpp primitives.cpp
 TESTS = test_actions \
 test_checksums \
 test_expressions \

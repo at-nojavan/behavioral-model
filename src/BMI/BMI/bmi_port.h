@@ -24,6 +24,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// Converted this code from C to C++ so we have to use extern C to ensures a C++ function adheres to the C calling convention.
+extern "C" {
+
 typedef struct bmi_port_s bmi_port_t;
 
 typedef struct bmi_port_mgr_s bmi_port_mgr_t;
@@ -76,3 +79,5 @@ int bmi_port_clear_stats(bmi_port_mgr_t *port_mgr,
                          bmi_port_stats_t *port_stats);
 
 #endif
+
+} //extern c

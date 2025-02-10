@@ -7,7 +7,7 @@ endif
 noinst_LTLIBRARIES = libbmi.la
 
 libbmi_la_SOURCES = \
-bmi_interface.c \
+bmi_interface.cpp \
 bmi_interface.h \
-bmi_port.c \
+bmi_port.cpp \
 BMI/bmi_port.h

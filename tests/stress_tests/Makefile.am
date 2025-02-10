@@ -13,7 +13,7 @@ $(top_builddir)/third_party/jsoncpp/libjson.la \
 # TODO(antonin): should the traffic.bin files be generated at compile time by
 # running the Python generator (instead of being checked in)?
 
-common_source = ../bmi_stubs.c stress_utils.h stress_utils.cpp
+common_source = ../bmi_stubs.cpp stress_utils.h stress_utils.cpp
 
 TESTS = \
 test_parser_deparser_1 \
