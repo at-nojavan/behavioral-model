@@ -89,6 +89,8 @@ class SimpleSwitch : public Switch {
 
   int receive_(port_t port_num, const char *buffer, int len) override;
 
+  int receive_with_metadata_(port_t port_num, const char *buffer, int len, MyMetadata metadata) override;
+
   void start_and_return_() override;
 
   void reset_target_state_() override;

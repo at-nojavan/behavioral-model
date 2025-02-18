@@ -23,6 +23,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "bm/bm_sim/packet_handler.h"
 
 // Converted this code from C to C++ so we have to use extern C to ensures a C++ function adheres to the C calling convention.
 extern "C" {
@@ -48,9 +49,18 @@ int bmi_port_create_mgr(bmi_port_mgr_t **port_mgr, int max_port_count);
 /* Start running the port manager on its own thread */
 int bmi_start_mgr(bmi_port_mgr_t *port_mgr);
 
+// int bmi_set_packet_handler(bmi_port_mgr_t *port_mgr,
+// 			   bmi_packet_handler_t packet_handler,
+// 			   void *cookie);
+
+uint64_t get_truncated_timestamp_ns();
+
+uint64_t truncated_timestamp_add_offset(uint64_t timestamp_ns, int64_t offset_us);
+
 int bmi_set_packet_handler(bmi_port_mgr_t *port_mgr,
-			   bmi_packet_handler_t packet_handler,
-			   void *cookie);
+                                       const PacketHandlerWithPacketInfo &handler);
+int bmi_set_packet_handler_with_packet_info(bmi_port_mgr_t *port_mgr,
+                                       const PacketHandlerWithPacketInfo &handler);
 
 int bmi_port_send(bmi_port_mgr_t *port_mgr,
 		  int port_num, const char *buffer, int len);

@@ -24,6 +24,10 @@
 #include <bm/bm_sim/tables.h>
 #include <bm/bm_sim/logger.h>
 
+#include <bm/bm_sim/switch.h>
+#include <algorithm>
+#include "src/BMI/BMI/bmi_port.h"
+
 #include <unistd.h>
 
 #include <condition_variable>
@@ -270,6 +274,49 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   return 0;
 }
 
+int
+SimpleSwitch::receive_with_metadata_(port_t port_num, const char *buffer, int len, MyMetadata metadata) 
+   {
+  // we limit the packet buffer to original size + 512 bytes, which means we
+  // cannot add more than 512 bytes of header data to the packet, which should
+  // be more than enough
+  auto packet = new_packet_ptr(port_num, packet_id++, len,
+                               bm::PacketBuffer(len + 512, buffer, len));
+
+  BMELOG(packet_in, *packet);
+
+  PHV *phv = packet->get_phv();
+
+  // many current P4 programs assume this
+  // it is also part of the original P4 spec
+  phv->reset_metadata();
+  RegisterAccess::clear_all(packet.get());
+
+  // setting standard metadata
+
+  phv->get_field("standard_metadata.ingress_port").set(port_num);
+  // using packet register 0 to store length, this register will be updated for
+  // each add_header / remove_header primitive call
+  packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
+  phv->get_field("standard_metadata.packet_length").set(len);
+  Field &f_instance_type = phv->get_field("standard_metadata.instance_type");
+  f_instance_type.set(PKT_INSTANCE_TYPE_NORMAL);
+
+  if (phv->has_field("intrinsic_metadata.ingress_global_timestamp")) {
+    phv->get_field("intrinsic_metadata.ingress_global_timestamp")
+        .set(get_ts().count());
+  }
+
+  if (phv->has_field("intrinsic_metadata.truncated_ingress_timestamp")) {
+    phv->get_field("intrinsic_metadata.truncated_ingress_timestamp")
+        .set(truncated_timestamp_add_offset(metadata.ingress_timestamp, clock_offset_us));        
+  }
+
+  input_buffer->push_front(
+      InputBuffer::PacketType::NORMAL, std::move(packet));
+  return 0;
+}
+
 void
 SimpleSwitch::start_and_return_() {
   check_queueing_metadata();
@@ -390,8 +437,48 @@ SimpleSwitch::transmit_thread() {
     BMELOG(packet_out, *packet);
     BMLOG_DEBUG_PKT(*packet, "Transmitting packet of size {} out of port {}",
                     packet->get_data_size(), packet->get_egress_port());
-    my_transmit_fn(packet->get_egress_port(), packet->get_packet_id(),
-                   packet->data(), packet->get_data_size());
+
+    auto *phv = packet -> get_phv();
+    auto &automatic_truncated_egress_timestamp_offset = phv ->get_field("intrinsic_metadata.automatic_truncated_egress_timestamp_offset");
+    auto &automatic_truncated_egress_timestamp_enable = phv ->get_field("intrinsic_metadata.automatic_truncated_egress_timestamp_enable");
+    automatic_truncated_egress_timestamp_enable.get_int();
+
+    size_t buffer_size = packet -> get_data_size();
+    char* buffer_data = packet->data();
+
+    std::string buffer_string(buffer_data, buffer_size);
+    
+    long long timestamp, timestamp_seconds, timestamp_nanoseconds;
+    int timestamp_size = 8;
+    
+    // timestamp calculation using functions:
+    uint64_t timestamp_with_offset = truncated_timestamp_add_offset(get_truncated_timestamp_ns(), clock_offset_us);
+    timestamp_seconds = timestamp_with_offset >> 32;
+    timestamp_nanoseconds = timestamp_with_offset & 0xFFFFFFFF;
+
+    const char* timestamp_bytes = reinterpret_cast<const char*>(&timestamp);
+    std::string timestamp_string(timestamp_bytes, sizeof(timestamp));
+    const char* timestamp_seconds_bytes = reinterpret_cast<const char*>(&timestamp_seconds);
+    std::string timestamp_seconds_string(timestamp_seconds_bytes, 4);
+    const char* timestamp_nanoseconds_bytes = reinterpret_cast<const char*>(&timestamp_nanoseconds);
+    std::string timestamp_nanoseconds_string(timestamp_nanoseconds_bytes, 4);
+    std::string truncated_timestamp_str = "";
+    truncated_timestamp_str.append(timestamp_nanoseconds_string);
+    truncated_timestamp_str.append(timestamp_seconds_string);
+
+    for (int i =0 ; i < timestamp_size ; i++){
+      buffer_string[automatic_truncated_egress_timestamp_offset.get_int()+i] = truncated_timestamp_str[timestamp_size-1 -i ];
+    }
+    
+    const char* buffer_char = buffer_string.c_str();
+
+    if (automatic_truncated_egress_timestamp_enable.get_int() == 1){
+      my_transmit_fn(packet->get_egress_port(), packet->get_packet_id(), buffer_char, packet->get_data_size());
+    }
+    else {
+      my_transmit_fn(packet->get_egress_port(), packet->get_packet_id(),
+                    packet->data(), packet->get_data_size());
+    }
   }
 }
 

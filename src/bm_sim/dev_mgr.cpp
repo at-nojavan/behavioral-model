@@ -146,6 +146,11 @@ DevMgrIface::set_packet_handler(const PacketHandler &handler, void *cookie) {
   return set_packet_handler_(handler, cookie);
 }
 
+PacketDispatcherIface::ReturnCode
+DevMgrIface::set_packet_handler_with_packet_info(const PacketHandlerWithPacketInfo &handler) {
+  return set_packet_handler_with_packet_info_(handler);
+}
+
 bool
 DevMgrIface::port_is_up(port_t port_num) const {
   return port_is_up_(port_num);
@@ -246,6 +251,12 @@ PacketDispatcherIface::ReturnCode
 DevMgr::set_packet_handler(const PacketHandler &handler, void *cookie) {
   assert(pimp);
   return pimp->set_packet_handler(handler, cookie);
+}
+
+PacketDispatcherIface::ReturnCode
+DevMgr::set_packet_handler_with_packet_info(const PacketHandlerWithPacketInfo &handler) {
+  assert(pimp);
+  return pimp->set_packet_handler_with_packet_info(handler);
 }
 
 PacketDispatcherIface::ReturnCode

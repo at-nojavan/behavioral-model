@@ -17,7 +17,21 @@
 #define BM_BM_SIM_PACKET_HANDLER_H_
 
 #include <functional>
+#include <cassert>
 
+struct MyMetadata {
+	long long ingress_timestamp;
+	inline static char shouldBeUsedAsCookie = 0;  // Used only for its address, the value is never used.
+	static MyMetadata& castCookie(void* cookie) { return *static_cast<MyMetadata*>(cookie); }
+};
+struct PacketInfo {
+   int port_num; const char* buffer; int len;
+   MyMetadata metadata;
+};
+
+using PacketHandlerWithPacketInfo = std::function<void(const PacketInfo *packetInfo)>;
+using PacketHandler = std::function<void(int port_num, const char *buffer,
+                                         int len, void* cookie)>;
 namespace bm {
 
 class PacketDispatcherIface {
@@ -32,6 +46,12 @@ class PacketDispatcherIface {
 
   virtual ReturnCode set_packet_handler(const PacketHandler &handler,
                                         void* cookie) = 0;
+
+  // Old ports can't use this. otherwise it will assert an error.
+  // New ports must override it.
+  virtual ReturnCode set_packet_handler_with_packet_info(const PacketHandlerWithPacketInfo &handler){
+    assert(false);
+  }
 };
 
 class PacketReceiverIface {

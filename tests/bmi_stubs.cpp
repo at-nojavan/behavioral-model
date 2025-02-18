@@ -43,6 +43,11 @@ int bmi_set_packet_handler(bmi_port_mgr_t *port_mgr,
   return 0;
 }
 
+int bmi_set_packet_handler_with_packet_info(bmi_port_mgr_t *port_mgr, const PacketHandlerWithPacketInfo &handler) {
+  UNUSED(port_mgr); UNUSED(handler);
+  return 0;
+}
+
 int bmi_port_send(bmi_port_mgr_t *port_mgr, int port_num,
                   const char *buffer, int len) {
   UNUSED(port_mgr); UNUSED(port_num); UNUSED(buffer); UNUSED(len);

@@ -116,6 +116,8 @@ OptionsParser::parse(int argc, char *argv[], TargetParserIface *tp,
 #endif
       ("device-id", po::value<device_id_t>(),
        "Device ID, used to identify the device in IPC messages (default 0)")
+      ("clock-offset", po::value<int64_t>(),
+       "Switch clock offset from OS clock")
       ("nanolog", po::value<std::string>(),
        "IPC socket to use for nanomsg pub/sub logs "
        "(default: no nanomsg logging")
@@ -251,6 +253,11 @@ OptionsParser::parse(int argc, char *argv[], TargetParserIface *tp,
   device_id = 0;
   if (vm.count("device-id")) {
     device_id = vm["device-id"].as<device_id_t>();
+  }
+
+  clock_offset = 0;
+  if (vm.count("clock-offset")) {
+    clock_offset = vm["clock-offset"].as<int64_t>();
   }
 
 #ifdef BM_NANOMSG_ON

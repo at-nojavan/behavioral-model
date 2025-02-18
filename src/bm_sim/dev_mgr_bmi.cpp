@@ -101,13 +101,20 @@ class BmiDevMgrImp : public DevMgrIface {
       Logger::get()->critical("Could not start BMI port manager");
   }
 
+  // This version of set_packet_handler function takes a std::function as input parameter
   ReturnCode set_packet_handler_(const PacketHandler &handler, void *cookie)
       override {
-    using function_t = void(int, const char *, int, void *);
-    function_t * const*ptr_fun = handler.target<function_t *>();
-    assert(ptr_fun);
-    assert(*ptr_fun);
-    if (bmi_set_packet_handler(port_mgr, *ptr_fun, cookie)) {
+    if (bmi_set_packet_handler_with_packet_info(port_mgr,[handler, cookie](const PacketInfo *packetInfo) { handler(packetInfo->port_num, packetInfo->buffer, packetInfo->len, cookie); })) {
+      Logger::get()->critical("Could not set BMI packet handler");
+      return ReturnCode::ERROR;
+    }
+    return ReturnCode::SUCCESS;
+  }
+
+  // Atabak
+  ReturnCode set_packet_handler_with_packet_info_(const PacketHandlerWithPacketInfo &handler)
+      override {
+    if (bmi_set_packet_handler_with_packet_info(port_mgr, handler)) {
       Logger::get()->critical("Could not set BMI packet handler");
       return ReturnCode::ERROR;
     }
@@ -165,6 +172,12 @@ DevMgr::set_dev_mgr_bmi(
   assert(!pimp);
   pimp = std::unique_ptr<DevMgrIface>(
       new BmiDevMgrImp(device_id, max_port_count, notifications_transport));
+}
+
+void
+DevMgr::set_dev_mgr_bmi_clock_offset(int64_t clock_offset){
+  assert(pimp);
+  pimp -> clock_offset_us = clock_offset;
 }
 
 }  // namespace bm

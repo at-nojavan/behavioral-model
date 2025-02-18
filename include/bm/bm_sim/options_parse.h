@@ -76,6 +76,7 @@ class OptionsParser {
   std::string pcap_dir{};
   int thrift_port{0};
   device_id_t device_id{};
+  int64_t clock_offset;
   // if true read/write packets from files instead of interfaces
   bool use_files{false};
   // time to wait (in seconds) before starting packet processing
