@@ -115,6 +115,8 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
 
   int receive(port_t port_num, const char *buffer, int len);
 
+  int receive_with_metadata(const PacketInfo *packetInfo);
+
   //! Call this function when you are ready to process packets. This function
   //! will call start_and_return_() which you have to override in your switch
   //! implementation. Note that if the switch is started without a P4
@@ -899,6 +901,12 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   //! Override in your switch implementation; it will be called every time a
   //! packet is received.
   virtual int receive_(port_t port_num, const char *buffer, int len) = 0;
+
+  // Calls the old version by default. Must be overriden.
+  virtual int receive_with_metadata_(port_t port_num, const char *buffer, int len, MyMetadata metadata){
+    return receive_(port_num, buffer, len);
+  }
+  int64_t clock_offset;
 
   //! Override in your switch implementation; do all your initialization in this
   //! function (e.g. start processing threads) and call start_and_return() when

@@ -38,17 +38,17 @@ using namespace bm;
 
 using testing::Types;
 
-class TestDevMgrImp : public DevMgrIface {
+class TestDevMgrWithInfoImp : public DevMgrIface {
  public:
-  TestDevMgrImp() {
+  TestDevMgrWithInfoImp() {
     // 0 is device_id
     p_monitor = PortMonitorIface::make_active(0);
   }
 
-  ~TestDevMgrImp() { 
+  ~TestDevMgrWithInfoImp() { 
     p_monitor->stop();
   }
-  
+
   // Not part of public interface, just for testing
   void set_port_status(port_t port, const PortStatus status) {
     ASSERT_TRUE(status == PortStatus::PORT_UP ||
@@ -126,7 +126,7 @@ class TestDevMgrImp : public DevMgrIface {
   mutable std::mutex status_mutex{};
 };
 
-class DevMgrTest : public ::testing::Test {
+class DevMgrWithInfoTest : public ::testing::Test {
  public:
   void port_status(DevMgrIface::port_t port_num,
                    const DevMgrIface::PortStatus status) {
@@ -136,13 +136,13 @@ class DevMgrTest : public ::testing::Test {
   }
 
  protected:
-  DevMgrTest()
-      : g_mgr(new TestDevMgrImp()) {
+  DevMgrWithInfoTest()
+      : g_mgr(new TestDevMgrWithInfoImp()) {
     g_mgr->start();
   }
 
   void register_callback() {
-    port_cb = std::bind(&DevMgrTest::port_status, this, std::placeholders::_1,
+    port_cb = std::bind(&DevMgrWithInfoTest::port_status, this, std::placeholders::_1,
                         std::placeholders::_2);
     g_mgr->register_status_cb(DevMgrIface::PortStatus::PORT_ADDED, port_cb);
     g_mgr->register_status_cb(DevMgrIface::PortStatus::PORT_REMOVED, port_cb);
@@ -165,10 +165,10 @@ class DevMgrTest : public ::testing::Test {
   DevMgrIface::PortStatusCb port_cb{};
   std::map<DevMgrIface::PortStatus, uint32_t> cb_counts{};
   mutable std::mutex cnt_mutex{};
-  std::unique_ptr<TestDevMgrImp> g_mgr{nullptr};
+  std::unique_ptr<TestDevMgrWithInfoImp> g_mgr{nullptr};
 };
 
-TEST_F(DevMgrTest, cb_test) {
+TEST_F(DevMgrWithInfoTest, cb_test) {
   const unsigned int NPORTS = 10;
 
   register_callback();
@@ -176,6 +176,7 @@ TEST_F(DevMgrTest, cb_test) {
   for (unsigned int i = 0; i < NPORTS; i++) {
     g_mgr->port_add("dummyport", i, {});
   }
+  // ASSERT_TRUE(false);
   std::this_thread::sleep_for(std::chrono::seconds(2));
   ASSERT_EQ(NPORTS, get_count(DevMgrIface::PortStatus::PORT_ADDED))
       << "Port add callbacks incorrect" << std::endl;
@@ -203,11 +204,11 @@ TEST_F(DevMgrTest, cb_test) {
       << "Number of port remove callbacks incorrect" << std::endl;
 }
 
-class PacketInReceiver {
+class PacketInReceiverWithInfo {
  public:
   enum class Status { CAN_READ, CAN_RECEIVE };
 
-  PacketInReceiver(size_t max_size)
+  PacketInReceiverWithInfo(size_t max_size)
       : max_size(max_size) {
     buffer_.reserve(max_size);
   }
@@ -260,16 +261,17 @@ class PacketInReceiver {
   mutable std::condition_variable can_read{};
 };
 
+
 #ifdef BM_NANOMSG_ON
 
 // is here because DevMgr has a protected destructor
-class PacketInSwitch : public DevMgr { };
+class PacketInSwitchWithInfo : public DevMgr { };
 
-class PacketInDevMgrTest : public ::testing::Test {
+class PacketInDevMgrWithInfoTest : public ::testing::Test {
  protected:
   static constexpr size_t kMaxBufferSize = 512;
 
-  PacketInDevMgrTest()
+  PacketInDevMgrWithInfoTest()
       : packet_inject(addr) { }
 
   void SetUp_(bool enforce_ports,
@@ -277,13 +279,14 @@ class PacketInDevMgrTest : public ::testing::Test {
     // 0 is device id
     sw.set_dev_mgr_packet_in(0, addr, notifications_transport, enforce_ports);
     sw.start();
-    auto cb_switch = std::bind(&PacketInReceiver::receive, &recv_switch,
+    auto cb_switch = std::bind(&PacketInReceiverWithInfo::receive, &recv_switch,
                                std::placeholders::_1, std::placeholders::_2,
                                std::placeholders::_3, std::placeholders::_4);
-    sw.set_packet_handler(cb_switch, nullptr);
+    // sw.set_packet_handler(cb_switch, nullptr);
+    sw.set_packet_handler_with_packet_info([this](const PacketInfo *packetInfo){PacketInReceiverWithInfo::receive(packetInfo);});
 
     packet_inject.start();
-    auto cb_lib = std::bind(&PacketInReceiver::receive, &recv_lib,
+    auto cb_lib = std::bind(&PacketInReceiverWithInfo::receive, &recv_lib,
                             std::placeholders::_1, std::placeholders::_2,
                             std::placeholders::_3, std::placeholders::_4);
     packet_inject.set_packet_receiver(cb_lib, nullptr);
@@ -296,7 +299,7 @@ class PacketInDevMgrTest : public ::testing::Test {
   virtual void TearDown() {
   }
 
-  bool check_recv(PacketInReceiver *receiver,
+  bool check_recv(PacketInReceiverWithInfo *receiver,
                   int send_port, const char *send_buffer, size_t size,
                   unsigned int timeout_ms = 1000) {
     char recv_buffer[kMaxBufferSize];
@@ -311,30 +314,30 @@ class PacketInDevMgrTest : public ::testing::Test {
 
   const std::string addr = "ipc:///tmp/test_packet_in_abc123";
 
-  PacketInReceiver recv_switch{kMaxBufferSize};
-  PacketInReceiver recv_lib{kMaxBufferSize};
+  PacketInReceiverWithInfo recv_switch{kMaxBufferSize};
+  PacketInReceiverWithInfo recv_lib{kMaxBufferSize};
 
-  PacketInSwitch sw;
+  PacketInSwitchWithInfo sw;
 
   bm_apps::PacketInject packet_inject;
 };
 
-TEST_F(PacketInDevMgrTest, PacketInTest) {
+TEST_F(PacketInDevMgrWithInfoTest, PacketInTest) {
   constexpr int port = 2;
   const char pkt[] = {'\x0a', '\xba'};
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_switch.check_status());
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_lib.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_switch.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_lib.check_status());
   // switch -> lib
   sw.transmit_fn(port, pkt, sizeof(pkt));
   ASSERT_TRUE(check_recv(&recv_lib, port, pkt, sizeof(pkt)));
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_switch.check_status());
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_lib.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_switch.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_lib.check_status());
   // lib -> switch
   packet_inject.send(port, pkt, sizeof(pkt));
   ASSERT_TRUE(check_recv(&recv_switch, port, pkt, sizeof(pkt)));
 }
 
-TEST_F(PacketInDevMgrTest, InfoRequestTest) {
+TEST_F(PacketInDevMgrWithInfoTest, InfoRequestTest) {
   constexpr int port = 2;
   // using info_type 0 and 1, but can be any integer value at the moment
   // we expect a return value of 1 (error) as bmv2 does not support any request
@@ -344,9 +347,9 @@ TEST_F(PacketInDevMgrTest, InfoRequestTest) {
   ASSERT_EQ(1, packet_inject.request_info(port, 1, &rep_v));
 }
 
-class PacketInDevMgrPortStatusTest : public PacketInDevMgrTest {
+class PacketInDevMgrWithInfoPortStatusTest : public PacketInDevMgrWithInfoTest {
  protected:
-  PacketInDevMgrPortStatusTest() { }
+  PacketInDevMgrWithInfoPortStatusTest() { }
 
   virtual void SetUp() {
     SetUp_(true, nullptr);
@@ -364,7 +367,7 @@ class PacketInDevMgrPortStatusTest : public PacketInDevMgrTest {
   }
 
   void register_callback() {
-    port_cb = std::bind(&PacketInDevMgrPortStatusTest::port_status, this,
+    port_cb = std::bind(&PacketInDevMgrWithInfoPortStatusTest::port_status, this,
                         std::placeholders::_1, std::placeholders::_2);
     sw.register_status_cb(DevMgrIface::PortStatus::PORT_ADDED, port_cb);
     sw.register_status_cb(DevMgrIface::PortStatus::PORT_REMOVED, port_cb);
@@ -398,21 +401,21 @@ class PacketInDevMgrPortStatusTest : public PacketInDevMgrTest {
   mutable std::mutex cnt_mutex{};
 };
 
-TEST_F(PacketInDevMgrPortStatusTest, BadPort) {
+TEST_F(PacketInDevMgrWithInfoPortStatusTest, BadPort) {
   constexpr int port = 2;
   const char pkt[] = {'\x0a', '\xba'};
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_switch.check_status());
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_lib.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_switch.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_lib.check_status());
   // lib -> switch
   packet_inject.send(port, pkt, sizeof(pkt));
   ASSERT_FALSE(check_recv(&recv_switch, port, pkt, sizeof(pkt)));
 }
 
-TEST_F(PacketInDevMgrPortStatusTest, Basic) {
+TEST_F(PacketInDevMgrWithInfoPortStatusTest, Basic) {
   constexpr int port = 2;
   const char pkt[] = {'\x0a', '\xba'};
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_switch.check_status());
-  ASSERT_EQ(PacketInReceiver::Status::CAN_RECEIVE, recv_lib.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_switch.check_status());
+  ASSERT_EQ(PacketInReceiverWithInfo::Status::CAN_RECEIVE, recv_lib.check_status());
   packet_inject.port_add(port);
   packet_inject.send(port, pkt, sizeof(pkt));
   ASSERT_TRUE(check_recv(&recv_switch, port, pkt, sizeof(pkt)));
@@ -421,7 +424,7 @@ TEST_F(PacketInDevMgrPortStatusTest, Basic) {
   ASSERT_FALSE(check_recv(&recv_switch, port, pkt, sizeof(pkt)));
 }
 
-TEST_F(PacketInDevMgrPortStatusTest, Status) {
+TEST_F(PacketInDevMgrWithInfoPortStatusTest, Status) {
   constexpr int port = 2;
   const char pkt[] = {'\x0a', '\xba'};
 
@@ -451,142 +454,3 @@ TEST_F(PacketInDevMgrPortStatusTest, Status) {
 }
 
 #endif  // BM_NANOMSG_ON
-
-struct PMActive { };
-struct PMPassive { };
-
-// testing the port status nanomsg notifications
-template <typename PMType>
-class PortMonitorTest : public ::testing::Test {
- protected:
-  using port_t = DevMgrIface::port_t;
-  using PortStatus = DevMgrIface::PortStatus;
-
-  static constexpr device_id_t device_id = 0;
-
-  PortMonitorTest()
-      : notifications_writer(new MemoryAccessor(4096)) {
-    make_monitor();
-  }
-
-  virtual void SetUp() {
-    auto status_fn = std::bind(&PortMonitorTest::port_is_up,
-                               this, std::placeholders::_1);
-    p_monitor->start(status_fn);
-  }
-
-  // virtual void TearDown() { }
-
-  void make_monitor();
-
-  bool port_is_up(port_t port);
-
-  void set_port_status(port_t port, PortStatus status);
-
-  const PortMonitorIface::msg_hdr_t *get_msg_hdr(const char *buffer) const {
-    return reinterpret_cast<const PortMonitorIface::msg_hdr_t *>(buffer);
-  }
-
-  const PortMonitorIface::one_status_t *get_statuses(const char *buffer) const {
-    return reinterpret_cast<const PortMonitorIface::one_status_t *>(
-        buffer + sizeof(PortMonitorIface::msg_hdr_t));
-  }
-
-  std::unordered_map<port_t, PortStatus> port_status{};
-  mutable std::mutex status_mutex{};
-  std::unique_ptr<PortMonitorIface> p_monitor{nullptr};
-  std::shared_ptr<MemoryAccessor> notifications_writer{nullptr};
-};
-
-template <typename PMType>
-constexpr device_id_t PortMonitorTest<PMType>::device_id;
-
-template<>
-void
-PortMonitorTest<PMPassive>::make_monitor() {
-  p_monitor = PortMonitorIface::make_passive(device_id, notifications_writer);
-}
-
-template<>
-void
-PortMonitorTest<PMActive>::make_monitor() {
-  p_monitor = PortMonitorIface::make_active(device_id, notifications_writer);
-}
-
-template<>
-bool
-PortMonitorTest<PMPassive>::port_is_up(port_t port) {
-  (void)port;
-  assert(0);
-  return false;
-}
-
-template<>
-bool
-PortMonitorTest<PMActive>::port_is_up(port_t port) {
-  std::lock_guard<std::mutex> lock(status_mutex);
-  return (port_status.at(port) == PortStatus::PORT_UP);
-}
-
-template<>
-void
-PortMonitorTest<PMPassive>::set_port_status(port_t port, PortStatus status) {
-  p_monitor->notify(port, status);
-}
-
-template<>
-void
-PortMonitorTest<PMActive>::set_port_status(port_t port, PortStatus status) {
-  if (status == PortStatus::PORT_ADDED || status == PortStatus::PORT_UP) {
-    std::lock_guard<std::mutex> lock(status_mutex);
-    port_status[port] = PortStatus::PORT_UP;
-  }
-  if (status == PortStatus::PORT_REMOVED || status == PortStatus::PORT_DOWN) {
-    std::lock_guard<std::mutex> lock(status_mutex);
-    port_status[port] = PortStatus::PORT_DOWN;
-  }
-  if (status == PortStatus::PORT_ADDED || status == PortStatus::PORT_REMOVED) {
-    p_monitor->notify(port, status);
-  }
-}
-
-using PMTypes = Types<PMPassive, PMActive>;
-
-TYPED_TEST_SUITE(PortMonitorTest, PMTypes);
-
-using std::chrono::milliseconds;
-using std::this_thread::sleep_for;
-
-TYPED_TEST(PortMonitorTest, Basic) {
-  using PortStatus = DevMgrIface::PortStatus;
-  using port_t = DevMgrIface::port_t;
-  using Status = MemoryAccessor::Status;
-  const port_t port = 1;
-
-  char buffer[128];
-
-  this->set_port_status(port, PortStatus::PORT_ADDED);
-  this->set_port_status(port, PortStatus::PORT_UP);
-  this->notifications_writer->read(buffer, sizeof(buffer));
-  auto msg_hdr = this->get_msg_hdr(buffer);
-  auto statuses = this->get_statuses(buffer);
-  ASSERT_EQ(0, memcmp("PRT|", msg_hdr->sub_topic, sizeof(msg_hdr->sub_topic)));
-  ASSERT_EQ(this->device_id, msg_hdr->switch_id);
-  ASSERT_EQ(1u, msg_hdr->num_statuses);
-  ASSERT_EQ(port, statuses[0].port);
-  ASSERT_EQ(1, statuses[0].status);
-
-  this->set_port_status(port, PortStatus::PORT_UP);
-  sleep_for(milliseconds(300));
-  ASSERT_NE(Status::CAN_READ, this->notifications_writer->check_status());
-
-  this->set_port_status(port, PortStatus::PORT_DOWN);
-  this->notifications_writer->read(buffer, sizeof(buffer));
-  msg_hdr = this->get_msg_hdr(buffer);
-  statuses = this->get_statuses(buffer);
-  ASSERT_EQ(0, memcmp("PRT|", msg_hdr->sub_topic, sizeof(msg_hdr->sub_topic)));
-  ASSERT_EQ(this->device_id, msg_hdr->switch_id);
-  ASSERT_EQ(1u, msg_hdr->num_statuses);
-  ASSERT_EQ(port, statuses[0].port);
-  ASSERT_EQ(0, statuses[0].status);
-}

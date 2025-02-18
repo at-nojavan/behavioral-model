@@ -19,7 +19,9 @@ $(top_builddir)/src/bm_apps/libbmapps.la \
 
 # Define unit tests
 common_source = main.cpp ../../test_utils/utils.cpp ../../test_utils/utils.h
-TESTS = test_packet_redirect \
+TESTS = test_switch_with_packet_info \
+test_packet_redirect \
+test_packet_redirect_bmi \
 test_truncate \
 test_swap \
 test_queueing \
@@ -29,7 +31,10 @@ test_parser_error
 check_PROGRAMS = $(TESTS) test_all
 
 # Sources for tests
+test_switch_with_packet_info_SOURCES = $(common_source) test_switch_with_packet_info.cpp
 test_packet_redirect_SOURCES = $(common_source) test_packet_redirect.cpp
+test_packet_redirect_bmi_SOURCES = $(common_source) test_packet_redirect_bmi.cpp
+test_packet_redirect_bmi_LDFLAGS = -Lpcap_mock
 test_truncate_SOURCES = $(common_source) test_truncate.cpp
 test_swap_SOURCES = $(common_source) test_swap.cpp
 test_queueing_SOURCES = $(common_source) test_queueing.cpp
@@ -37,7 +42,9 @@ test_recirc_SOURCES = $(common_source) test_recirc.cpp
 test_parser_error_SOURCES = $(common_source) test_parser_error.cpp
 
 test_all_SOURCES = $(common_source) \
+test_switch_with_packet_info.cpp \
 test_packet_redirect.cpp \
+test_packet_redirect_bmi.cpp \
 test_truncate.cpp \
 test_swap.cpp \
 test_queueing.cpp \

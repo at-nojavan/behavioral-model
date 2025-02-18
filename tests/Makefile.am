@@ -34,7 +34,8 @@ $(builddir)/libtestutils.la \
 
 # Define unit tests
 common_source = main.cpp bmi_stubs.cpp primitives.cpp
-TESTS = test_actions \
+TESTS = test_packet_handler_with_info \
+test_actions \
 test_checksums \
 test_expressions \
 test_conditionals \
@@ -76,6 +77,8 @@ test_ras
 check_PROGRAMS = $(TESTS) test_all
 
 # Sources for tests
+
+test_packet_handler_with_info_SOURCES	= $(common_source) test_packet_handler_with_info.cpp
 test_actions_SOURCES         = $(common_source) test_actions.cpp
 test_checksums_SOURCES       = $(common_source) test_checksums.cpp
 test_expressions_SOURCES     = $(common_source) test_expressions.cpp
@@ -116,6 +119,7 @@ test_log_msg_SOURCES         = $(common_source) test_log_msg.cpp
 test_ras_SOURCES             = $(common_source) test_ras.cpp
 
 test_all_SOURCES = $(common_source) \
+test_packet_handler_with_info.cpp \
 test_actions.cpp \
 test_checksums.cpp \
 test_expressions.cpp \

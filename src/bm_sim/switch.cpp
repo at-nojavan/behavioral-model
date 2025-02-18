@@ -73,6 +73,15 @@ SwitchWContexts::receive(port_t port_num, const char *buffer, int len) {
   return receive_(port_num, buffer, len);
 }
 
+int
+SwitchWContexts::receive_with_metadata(const PacketInfo *packetInfo) {
+  if (dump_packet_data > 0) {
+    Logger::get()->info("Received packet of length {} on port {}: {}",
+                        packetInfo->len, packetInfo->port_num, sample_packet_data(packetInfo->buffer, packetInfo->len));
+  }
+  return receive_with_metadata_(packetInfo->port_num, packetInfo->buffer, packetInfo->len, packetInfo->metadata);
+}
+
 void
 SwitchWContexts::start_and_return() {
   std::unique_lock<std::mutex> config_lock(config_mutex);
@@ -224,6 +233,9 @@ SwitchWContexts::init_from_options_parser(
     std::unique_ptr<DevMgrIface> my_dev_mgr) {
   int status = 0;
 
+  clock_offset = parser.clock_offset;
+  clock_offset_us = parser.clock_offset;
+
   auto transport = my_transport;
   if (transport == nullptr) {
 #ifdef BM_NANOMSG_ON
@@ -271,9 +283,10 @@ SwitchWContexts::init_from_options_parser(
   else if (parser.packet_in)
     set_dev_mgr_packet_in(device_id, parser.packet_in_addr, transport);
 #endif
-  else
+  else{
     set_dev_mgr_bmi(device_id, parser.max_port_count, transport);
-
+    set_dev_mgr_bmi_clock_offset(clock_offset_us);
+  }
   for (const auto &iface : parser.ifaces) {
     std::cout << "Adding interface " << iface.second
               << " as port " << iface.first
@@ -322,8 +335,12 @@ SwitchWContexts::init_from_options_parser(
   max_port_count = parser.max_port_count;
 
   // TODO(unknown): is this the right place to do this?
-  set_packet_handler(packet_handler, static_cast<void *>(this));
-
+  
+  // set_packet_handler function that sets a packet handler with a struct as input.
+  if (set_packet_handler_with_packet_info([this](const PacketInfo *packetInfo){receive_with_metadata(packetInfo);})==ReturnCode::UNSUPPORTED){
+    set_packet_handler(packet_handler, static_cast<void *>(this));
+  }
+ 
   return status;
 }
 

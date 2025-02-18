@@ -57,6 +57,8 @@ class DevMgrIface : public PacketDispatcherIface {
   static constexpr char kPortExtraInPcap[] = "in_pcap";
   static constexpr char kPortExtraOutPcap[] = "out_pcap";
 
+  int64_t clock_offset_us;
+
   struct PortInfo {
     PortInfo(port_t port_num, const std::string &iface_name,
              const PortExtras &port_extras = {})
@@ -107,6 +109,8 @@ class DevMgrIface : public PacketDispatcherIface {
 
   ReturnCode set_packet_handler(const PacketHandler &handler, void *cookie);
 
+  ReturnCode set_packet_handler_with_packet_info(const PacketHandlerWithPacketInfo &handler);
+
   bool port_is_up(port_t port_num) const;
 
   ReturnCode register_status_cb(const PortStatus &type,
@@ -134,6 +138,9 @@ class DevMgrIface : public PacketDispatcherIface {
   virtual ReturnCode set_packet_handler_(const PacketHandler &handler,
                                          void *cookie) = 0;
 
+  virtual ReturnCode set_packet_handler_with_packet_info_(const PacketHandlerWithPacketInfo &handler){
+    return ReturnCode::UNSUPPORTED;
+  }
   virtual bool port_is_up_(port_t port_num) const = 0;
 
   virtual std::map<port_t, PortInfo> get_port_info_() const = 0;
@@ -159,6 +166,8 @@ class DevMgr : public PacketDispatcherIface {
 
   DevMgr();
 
+  int64_t clock_offset_us;
+
   // set_dev_* : should be called before port_add and port_remove.
 
   // meant for testing
@@ -168,6 +177,8 @@ class DevMgr : public PacketDispatcherIface {
       device_id_t device_id,
       int max_port_count,
       std::shared_ptr<TransportIface> notifications_transport = nullptr);
+
+  void set_dev_mgr_bmi_clock_offset(int64_t clock_offset);
 
   // The interface names are instead interpreted as file names.
   // wait_time_in_seconds indicate how long the starting thread should
@@ -201,6 +212,8 @@ class DevMgr : public PacketDispatcherIface {
   ReturnCode set_packet_handler(const PacketHandler &handler, void *cookie)
       override;
 
+  ReturnCode set_packet_handler_with_packet_info(const PacketHandlerWithPacketInfo &handler)
+      override;
   //! Register a callback function to be called every time the status of a port
   //! changes.
   ReturnCode register_status_cb(const PortStatus &type,

@@ -29,11 +29,16 @@
 
 #include "bmi_interface.h"
 #include "BMI/bmi_port.h"
+#include <bm/bm_sim/dev_mgr.h>
+#include <functional>
+#include <cmath>
 
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
+#include <iostream>
 
 typedef struct bmi_port_s {
   bmi_interface_t *bmi;
@@ -52,7 +57,8 @@ typedef struct bmi_port_mgr_s {
   fd_set fds;
   int max_fd;
   void *cookie;
-  bmi_packet_handler_t packet_handler;
+  PacketHandlerWithPacketInfo packet_handler;
+  int64_t switch_clock_offset_us;   
   pthread_t select_thread;
   /* We use a RW mutex to protect port_mgr and port state. Send & receive will
   acquire a read lock, while port_add and port_remove will acquire a write
@@ -61,6 +67,50 @@ typedef struct bmi_port_mgr_s {
   & receive for all ports. */
   pthread_rwlock_t lock;
 } bmi_port_mgr_t;
+
+uint64_t get_truncated_timestamp_ns(){
+  struct timeval currentTime;
+  gettimeofday(&currentTime, NULL);
+  long long timestamp_seconds = (long long)currentTime.tv_sec;
+  long long timestamp_nanoseconds = (long long)(currentTime.tv_usec * 1000);
+  uint64_t timestamp = (static_cast<uint64_t>(timestamp_seconds) << 32) | timestamp_nanoseconds;
+  return timestamp;
+}
+
+uint64_t truncated_timestamp_add_offset(uint64_t timestamp, int64_t offset_us){
+  uint32_t timestamp_s = timestamp >> 32;
+  uint32_t timestamp_ns = timestamp & 0xFFFFFFFF;
+  
+  int64_t offset = offset_us * 1000;
+  int sign =1 ;
+  if ((offset >> 63) == 0){
+    sign = 1;
+  }
+  else{
+    sign = -1;
+  }
+
+  // uint64_t magnitude_of_offset = abs(offset);
+  int64_t offset_s = sign * ((sign * offset) /1000000000);
+  int64_t offset_ns = sign * ((sign * offset) % 1000000000);
+
+  int64_t timestamp_with_offset_ns = timestamp_ns + offset_ns;
+  int64_t timestamp_with_offset_s = 0;
+  if (timestamp_with_offset_ns >= 1000000000){
+    timestamp_with_offset_ns -= 1000000000;
+    timestamp_with_offset_s = timestamp_s + offset_s + 1;
+  }
+  else if(timestamp_with_offset_ns < 0){
+    timestamp_with_offset_ns += 1000000000;
+    timestamp_with_offset_s = timestamp_s + offset_s - 1;
+  }
+  else{
+    timestamp_with_offset_s = timestamp_s + offset_s;
+  }
+
+  uint64_t timestamp_with_offset = (static_cast<uint64_t>(timestamp_with_offset_s) << 32) | timestamp_with_offset_ns;
+  return timestamp_with_offset;
+}
 
 static inline bmi_port_t *get_port(bmi_port_mgr_t *port_mgr, int port_num) {
   int a = 0;
@@ -113,6 +163,7 @@ static void *run_select(void *data) {
   int pkt_len;
   fd_set fds;
   int max_fd;
+  long long timestamp;
 
   struct timeval timeout;
   while(1) {
@@ -155,6 +206,7 @@ static void *run_select(void *data) {
     hold the lock to call FD_ISSET... */
     int idx = 0;
     while (n && idx < port_mgr->port_count) {
+      uint64_t timestamp = get_truncated_timestamp_ns();
       port = &port_mgr->ports[idx];
       assert(port->bmi);
 
@@ -162,9 +214,13 @@ static void *run_select(void *data) {
         --n;
         pkt_len = bmi_interface_recv(port->bmi, &pkt_data);
         if (pkt_len >= 0) {
-          assert(port_mgr->packet_handler);
-          port_mgr->packet_handler(
-              port->port_num, pkt_data, pkt_len, port_mgr->cookie);
+          PacketInfo temp_packet = {
+            .port_num = port->port_num,
+            .buffer = pkt_data,
+            .len = pkt_len,
+            .metadata = {timestamp}
+          };
+          port_mgr->packet_handler(&temp_packet);
           pthread_mutex_lock(&port->stats_lock);
           port->stats.in_packets += 1;
           port->stats.in_octets += pkt_len;
@@ -225,12 +281,18 @@ int bmi_port_create_mgr(bmi_port_mgr_t **port_mgr, int max_port_count) {
   return 0;
 }
 
-int bmi_set_packet_handler(bmi_port_mgr_t *port_mgr,
-                           bmi_packet_handler_t packet_handler,
-                           void *cookie) {
+// This version of bmi_set_packet_handler function takes a std::function as input parameter
+int bmi_set_packet_handler(bmi_port_mgr_t *port_mgr, const PacketHandlerWithPacketInfo &handler) {
   pthread_rwlock_wrlock(&port_mgr->lock);
-  port_mgr->packet_handler = packet_handler;
-  port_mgr->cookie = cookie;
+  port_mgr->packet_handler = handler;
+  pthread_rwlock_unlock(&port_mgr->lock);
+  return 0;
+}
+
+// Atabak
+int bmi_set_packet_handler_with_packet_info(bmi_port_mgr_t *port_mgr, const PacketHandlerWithPacketInfo &handler) {
+  pthread_rwlock_wrlock(&port_mgr->lock);
+  port_mgr->packet_handler = handler;
   pthread_rwlock_unlock(&port_mgr->lock);
   return 0;
 }
