@@ -8,18 +8,16 @@ AM_CPPFLAGS += \
 -isystem $(top_srcdir)/third_party/gtest/include \
 -I$(srcdir)/.. \
 -I$(srcdir)/ \
--I$(top_srcdir)/targets/test_utils \
 -DTESTDATADIR=\"$(srcdir)/testdata\"
-
 LDADD = $(builddir)/../libsimpleswitch.la \
 $(top_builddir)/third_party/gtest/libgtest.la \
-$(top_builddir)/targets/test_utils/libtargetstestutils.la \
 $(top_builddir)/src/bm_apps/libbmapps.la \
 -lboost_filesystem
 
 # Define unit tests
-common_source = main.cpp ../../test_utils/utils.cpp ../../test_utils/utils.h
+common_source = main.cpp utils.cpp utils.h
 TESTS = test_packet_redirect \
+test_packet_redirect_bmi \
 test_truncate \
 test_swap \
 test_queueing \
@@ -30,6 +28,8 @@ check_PROGRAMS = $(TESTS) test_all
 
 # Sources for tests
 test_packet_redirect_SOURCES = $(common_source) test_packet_redirect.cpp
+test_packet_redirect_bmi_SOURCES = $(common_source) test_packet_redirect_bmi.cpp
+test_packet_redirect_bmi_LDFLAGS = -L/users/boyer/test_pcap
 test_truncate_SOURCES = $(common_source) test_truncate.cpp
 test_swap_SOURCES = $(common_source) test_swap.cpp
 test_queueing_SOURCES = $(common_source) test_queueing.cpp
@@ -38,6 +38,7 @@ test_parser_error_SOURCES = $(common_source) test_parser_error.cpp
 
 test_all_SOURCES = $(common_source) \
 test_packet_redirect.cpp \
+test_packet_redirect_bmi.cpp \
 test_truncate.cpp \
 test_swap.cpp \
 test_queueing.cpp \
